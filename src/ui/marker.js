@@ -11,11 +11,26 @@ import type Popup from './popup';
 import type {LngLatLike} from "../geo/lng_lat";
 import type {MapMouseEvent} from './events';
 
+export type Anchor = 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+export type Offset = number | PointLike | {[Anchor]: PointLike};
+
+export type MarkerOptions = {
+    anchor: Anchor,
+    offset: Offset
+};
+
 /**
  * Creates a marker component
- * @param element DOM element to use as a marker. If left unspecified a default SVG will be created as the DOM element to use.
- * @param options
- * @param options.offset The offset in pixels as a {@link PointLike} object to apply relative to the element's center. Negatives indicate left and up.
+ *
+ * @param {Object} element DOM element to use as a marker. If left unspecified a default SVG will be created as the DOM element to use.
+ * @param {Object} options
+ * @param {string} [options.anchor] - A string indicating the markers's location relative to
+*   the coordinate set via {@link Marker#setLngLat}.
+*   Options are `'top'`, `'bottom'`, `'left'`, `'right'`, `'top-left'`,
+*   `'top-right'`, `'bottom-left'`, and `'bottom-right'`. If unset the anchor will be
+*   dynamically set to ensure the marker falls within the map container with a preference
+*   for `'bottom'`.
+ * @param {number|PointLike|Object } [options.offset] The offset in pixels as a {@link PointLike} object to apply relative to the element's center. Negatives indicate left and up.
  * @example
  * var marker = new mapboxgl.Marker()
  *   .setLngLat([30.5, 50.5])
@@ -24,6 +39,7 @@ import type {MapMouseEvent} from './events';
  */
 class Marker {
     _map: Map;
+    options: MarkerOptions;
     _offset: Point;
     _element: HTMLElement;
     _popup: ?Popup;
@@ -268,7 +284,25 @@ class Marker {
             this._lngLat = smartWrap(this._lngLat, this._pos, this._map.transform);
         }
 
-        this._pos = this._map.project(this._lngLat)._add(this._offset);
+        const anchor = this.options.anchor;
+
+        const anchorTranslate = {
+            'top': 'translate(-50%,0)',
+            'top-left': 'translate(0,0)',
+            'top-right': 'translate(-100%,0)',
+            'bottom': 'translate(-50%,-100%)',
+            'bottom-left': 'translate(0,-100%)',
+            'bottom-right': 'translate(-100%,-100%)',
+            'left': 'translate(0,-50%)',
+            'right': 'translate(-100%,-50%)'
+        };
+
+        // anchor centered by default
+        if (!this.anchor) {
+            anchor = 'translate(50%,50%)';
+        }
+
+        this._pos = this._map.project(this._lngLat)._add(this._offset[anchor]);
 
         // because rounding the coordinates at every `move` event causes stuttered zooming
         // we only round them when _update is called with `moveend` or when its called with
@@ -277,7 +311,7 @@ class Marker {
             this._pos = this._pos.round();
         }
 
-        DOM.setTransform(this._element, `translate(-50%, -50%) translate(${this._pos.x}px, ${this._pos.y}px)`);
+        DOM.setTransform(this._element, `${anchorTranslate[anchor]} translate(${this._pos.x}px, ${this._pos.y}px)`);
     }
 
     /**
